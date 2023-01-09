@@ -37,7 +37,7 @@ export default {
   },
   data: () => ({
     fact: [85865, 38000, 25000, 87553, 70000, 10000, 169985, 15000, 15433, 5500, 3000, 387544],
-    plan: [80865, 30000, 19000, 89553, 80000, 18000, 169985, 15000, 15433, 5500, 3000, 387544],
+    plan: [80865, 30000, 19000, 89553, 80000, 18000, 169985, 412586, 15433, 5500, 3000, 387544],
     labels: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек',],
     counter: 'шт.',
     graphChartColors: ['#E83D46', "#00000054", "#F9A620", "#005FA7", "#00BFB9", "#FD2D91"],
@@ -59,6 +59,7 @@ export default {
       this.canvas.ctx = this.canvas.canvas.getContext('2d')
       this.setCanvasDimensions(this.canvas.canvas)
       this.drawDashMarkup()
+      this.drawLineChart(this.fact)
     },
     setCanvasDimensions(canvas) {
       const canvasStyle = getComputedStyle(canvas)
@@ -88,12 +89,13 @@ export default {
           ctx.stroke()
         }
       }
-
+      
+      const ctx = this.canvas.ctx
       const leftBar = this.$refs.LineChartLeftBar.$el
       const leftBarItemHeight_DPI = parseFloat(getComputedStyle(leftBar.children[0]).height).toFixed(2) * 2
       const leftBarItemGap_DPI = ((parseFloat(getComputedStyle(leftBar).height).toFixed(2) - leftBarItemHeight_DPI / 2 * leftBar.children.length) / this.canvas.leftBarNumber).toFixed(2) * 2
-
-      const ctx = this.canvas.ctx
+      
+      ctx.beginPath()
       ctx.strokeStyle = this.theme === 'light' ? '#EDEDED' : '#575757'
       const lineWidth = 1
       ctx.lineWidth = lineWidth // толщина линии
@@ -105,9 +107,37 @@ export default {
       drawFirstDash()
       drawLastDash()
       drawCoreDash()
+
+      ctx.closePath()
+    },
+    drawLineChart(data) {
+      const ctx = this.canvas.ctx
+      const max = Math.max(...data)
+      // const min = Math.min(...data)
+      const ratio = this.canvas.DPI_HEIGHT / max
+      const axisY = data.map(item => this.canvas.DPI_HEIGHT - item * ratio)
+      let axisX = []
+
+      for (let i = 0; i < this.horizontalBarItemsWidth.length; i++) {
+        const arr = this.horizontalBarItemsWidth.slice(0, i + 1).reduce(function(acc, item) {
+          return acc += Number(item)
+        }, 0)
+        axisX.push(arr)
+      }
+
+      for (let i = 0; i < data.length; i++) {
+        if (isFinite(i + 1)) {
+          ctx.beginPath()
+          ctx.setLineDash([0, 0])
+          ctx.moveTo((axisX[i] * 2), axisY[i])
+          ctx.lineTo((axisX[i + 1] * 2), axisY[i + 1])
+          ctx.strokeStyle = 'red'
+          ctx.stroke()
+        }
+      }
     },
     handlerCanvasMouseMove(e) {
-      this.itemSides.forEach(([left, right], index) => {
+      this.horizontalBarItemsCoords.forEach(([left, right], index) => {
         if (left <= e.clientX && e.clientX <= right) {
           this.pointerActive = index
         }
@@ -115,16 +145,22 @@ export default {
     },
     handlerCanvasMouseLeave() {
       this.pointerActive = null
-    }
+    },
   },
   computed: {
-    itemSides() {
+    horizontalBarItemsCoords() {
       const horizontalBar = this.$refs.LineChartHorizontalBar.$el
-      const itemSides = Array.from(horizontalBar.children).map(item => {
+      const horizontalBarItemsCoords = Array.from(horizontalBar.children).map(item => {
         return [item.getBoundingClientRect().left, item.getBoundingClientRect().right]
       })
-      return itemSides
-    }
+      return horizontalBarItemsCoords
+    },
+    horizontalBarItemsWidth() {
+      const horizontalBar = this.$refs.LineChartHorizontalBar.$el
+      return Array.from(horizontalBar.children).map(item => {
+        return parseFloat(getComputedStyle(item).width).toFixed(2)
+      })
+    },
   }
 }
 </script>
@@ -139,7 +175,6 @@ export default {
   max-height: 350px;
   width: 100%;
   height: 350px;
-  // border: 1px solid hsla(160, 100%, 37%, 1);
   box-shadow: 0px 5px 20px rgba(0, 0, 0, 0.07);
   border-radius: 0px 5px 5px 0px;
   padding: 30px 30px 20px 27.5px;
@@ -155,7 +190,6 @@ export default {
     height: 278px;
     grid-column: 2/3;
     grid-row: 1/2;
-    // margin-bottom: 9px;
   }
 }
 
