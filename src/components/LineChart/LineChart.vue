@@ -112,29 +112,42 @@ export default {
     },
     drawLineChart(data) {
       const ctx = this.canvas.ctx
-      const max = Math.max(...data)
-      // const min = Math.min(...data)
-      const ratio = this.canvas.DPI_HEIGHT / max
+      const maxPoint = Math.max(...data)
+      const ratio = this.canvas.DPI_HEIGHT / maxPoint
       const axisY = data.map(item => this.canvas.DPI_HEIGHT - item * ratio)
-      let axisX = []
-
-      for (let i = 0; i < this.horizontalBarItemsWidth.length; i++) {
-        const arr = this.horizontalBarItemsWidth.slice(0, i + 1).reduce(function(acc, item) {
-          return acc += Number(item)
-        }, 0)
-        axisX.push(arr)
-      }
+      const axisX = this.getCoordsAxisX()
 
       for (let i = 0; i < data.length; i++) {
         if (isFinite(i + 1)) {
           ctx.beginPath()
-          ctx.setLineDash([0, 0])
+          ctx.setLineDash([])
           ctx.moveTo((axisX[i] * 2), axisY[i])
           ctx.lineTo((axisX[i + 1] * 2), axisY[i + 1])
           ctx.strokeStyle = 'red'
+          ctx.lineWidth = 3
           ctx.stroke()
         }
       }
+    },
+    getCoordsAxisX() {
+      const axisX = []
+
+      for (let i = 0; i < this.horizontalBarItemsWidth.length; i++) {
+        let arr = []
+        const itemsWidthReducedArray = this.horizontalBarItemsWidth.slice(0, i + 1)
+
+        for (let i = 0; i < itemsWidthReducedArray.length; i++) {
+          if (i + 1 === itemsWidthReducedArray.length) {
+            arr.push(itemsWidthReducedArray[i] / 2)
+          }
+          else {
+            arr.push(itemsWidthReducedArray[i])
+          }
+        }
+        axisX.push(arr.reduce((acc, item) => acc += Number(item), 0))
+      }
+
+      return axisX
     },
     handlerCanvasMouseMove(e) {
       this.horizontalBarItemsCoords.forEach(([left, right], index) => {
