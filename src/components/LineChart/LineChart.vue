@@ -60,15 +60,20 @@ export default {
       this.setCanvasDimensions(this.canvas.canvas)
       this.drawDashMarkup()
       this.drawLineChart(this.fact)
+      // this.canvas.ctx.save()
     },
     setCanvasDimensions(canvas) {
       const canvasStyle = getComputedStyle(canvas)
       const DPI_WIDTH = parseFloat(canvasStyle.width) * 2
       const DPI_HEIGHT = parseFloat(canvasStyle.height) * 2
+      const DPI_PADDING_TOP = 20 * 2
+      const DPI_PADDING_BOTTOM = 10 * 2
       canvas.width = DPI_WIDTH
       canvas.height = DPI_HEIGHT
       this.canvas.DPI_WIDTH = DPI_WIDTH
       this.canvas.DPI_HEIGHT = DPI_HEIGHT
+      this.canvas.DPI_PADDING_TOP = DPI_PADDING_TOP
+      this.canvas.DPI_PADDING_BOTTOM = DPI_PADDING_BOTTOM
     },
     drawDashMarkup() {
       const drawFirstDash = () => {
@@ -98,7 +103,7 @@ export default {
       ctx.beginPath()
       ctx.strokeStyle = this.theme === 'light' ? '#EDEDED' : '#575757'
       const lineWidth = 1
-      ctx.lineWidth = lineWidth // толщина линии
+      ctx.lineWidth = lineWidth
       const dashWidth = 8 * 2
       const dashGap = 7 * 2
 
@@ -149,15 +154,73 @@ export default {
 
       return axisX
     },
+    drawPointer() {
+      const ctx = this.canvas.ctx
+      const maxPoint = Math.max(...this.fact)
+      const ratio = this.canvas.DPI_HEIGHT / maxPoint
+      const axisX = this.getCoordsAxisX()
+      const axisY = this.fact.map(item => this.canvas.DPI_HEIGHT - item * ratio)
+      const index = this.pointerActive
+
+      const drawOuterCircle = () => {
+        ctx.beginPath()
+        ctx.shadowBlur = 10
+        ctx.shadowOffsetX = 0
+        ctx.shadowOffsetY = 3
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.25)'
+        ctx.arc(axisX[index] * 2, axisY[index], 14, 0, 2*Math.PI, false)
+        ctx.fillStyle = '#FFFFFF'
+        ctx.fill()
+        ctx.lineWidth = 1
+        ctx.strokeStyle = '#FFFFFF'
+        ctx.stroke()
+        ctx.closePath()
+      }
+      const drawInnerCircle = () => {
+        ctx.beginPath()
+        ctx.shadowBlur = 0
+        ctx.shadowOffsetX = 0
+        ctx.shadowOffsetY = 0
+        ctx.shadowColor = 0
+        ctx.arc(axisX[index] * 2, axisY[index], 6, 0, 2*Math.PI, false)
+        ctx.fillStyle = '#E83D46'
+        ctx.fill()
+        ctx.lineWidth = 1
+        ctx.strokeStyle = '#E83D46'
+        ctx.stroke()
+        ctx.closePath()
+      }
+      const drawVerticalLine = () => {
+        ctx.beginPath()
+        ctx.strokeStyle = '#E83D46'
+        const lineWidth = 1
+        ctx.lineWidth = lineWidth
+        const dashWidth = 15 * 2
+        const dashGap = 5 * 2
+
+        ctx.setLineDash([dashWidth, dashGap])
+        ctx.moveTo(axisX[index] * 2, this.canvas.DPI_HEIGHT - lineWidth)
+        ctx.lineTo(axisX[index] * 2, axisY[index])
+        ctx.stroke()
+      }
+
+      drawVerticalLine()
+      drawOuterCircle()
+      drawInnerCircle()
+    },
     handlerCanvasMouseMove(e) {
+      this.initCanvas()
       this.horizontalBarItemsCoords.forEach(([left, right], index) => {
         if (left <= e.clientX && e.clientX <= right) {
           this.pointerActive = index
         }
       })
+      this.drawPointer()
     },
     handlerCanvasMouseLeave() {
       this.pointerActive = null
+      // this.canvas.ctx.restore()
+      this.initCanvas()
     },
   },
   computed: {
@@ -174,7 +237,12 @@ export default {
         return parseFloat(getComputedStyle(item).width).toFixed(2)
       })
     },
-  }
+  },
+  // watch: {
+  //   pointerActive() {
+  //     console.log('watch pointerActive')
+  //   }
+  // }
 }
 </script>
 
