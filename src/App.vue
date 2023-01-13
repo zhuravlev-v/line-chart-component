@@ -1,6 +1,7 @@
 <template>
   <div id="app">
-    <LineChart :theme="chartTheme" />
+    <button @click="changeTheme">{{ chartTheme }}</button>
+    <LineChart :theme="chartTheme" :counter="counter" />
   </div>
 </template>
 
@@ -9,7 +10,13 @@
 export default {
   data() {
     return {
-      chartTheme: 'light'
+      chartTheme: 'light',
+      counter: '$',
+    }
+  },
+  methods: {
+    changeTheme() {
+      this.chartTheme = this.chartTheme === 'light' ? 'dark' : 'light'
     }
   }
 }

@@ -59,6 +59,9 @@ export default {
 
 <style lang='scss' scoped>
   .left-bar {
+    padding-top: 20px;
+    padding-bottom: 10px;
+    box-sizing: content-box;
     display: flex;
     justify-content: space-between;
     flex-direction: column-reverse;

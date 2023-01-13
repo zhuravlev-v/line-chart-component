@@ -37,7 +37,7 @@ export default {
     grid-column: 2/3;
     grid-row: 2/3;
     justify-content: space-between;
-    padding-top: 8.5px;
+    // padding-top: 8.5px;
 
     &__item {
       flex-grow: 1;
