@@ -39,6 +39,12 @@ export default {
     justify-content: space-between;
     // padding-top: 8.5px;
 
+    @media (max-width: 500px) {
+      display: none;
+      grid-column: unset;
+      grid-row: unset;
+    }
+
     &__item {
       flex-grow: 1;
       text-align: center;

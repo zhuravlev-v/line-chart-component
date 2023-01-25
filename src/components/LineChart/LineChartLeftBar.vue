@@ -76,6 +76,12 @@ export default {
     grid-column: 1/2;
     grid-row: 1/2;
 
+    @media (max-width: 500px) {
+      display: none;
+      grid-column: unset;
+      grid-row: unset;
+    }
+
     &__item {
 
     }
