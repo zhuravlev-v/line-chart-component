@@ -1,16 +1,38 @@
 <template>
   <div :class="[ 'chart', theme ]">
-    <LineChartLeftBar 
+    <LineChartLeftBar
+      v-if="!noData"
       ref="LineChartLeftBar" 
-      :data="[...fact, ...plan]" 
-      :theme="theme" 
+      :data="dataMergedValues" 
+      :theme="theme"
       :itemsNumber="canvas.leftBarNumber"
     />
-    <LineChartCanvas 
-      ref="canvas"
-      @mouse-move="handlerCanvasMouseMove"
-      @mouse-leave="handlerCanvasMouseLeave"
-    />
+    <div class="chart__canvas-wrapper" 
+      @mousemove="handlerCanvasMouseMove" 
+      @mouseleave="handlerCanvasMouseLeave"
+    >
+      <LineChartCanvas
+        :noData="noData"
+        ref="canvas"
+        id="canvas"
+      />
+      <LineChartTooltip
+        v-if="isInitialized"
+        :data="data"
+        :active="pointerActive"
+        :coordsAxisX="coordsAxisX"
+        :coordsAxisY="coordsAxisY"
+        :coords="[
+          coordsAxisX?.[pointerActive] || null,
+          coordsAxisY[0]?.[pointerActive] || null
+        ]"
+        :canvasRect="{
+          width: canvas.DPI_WIDTH / 2,
+          height: canvas.DPI_HEIGHT / 2,
+          pBottom: canvas.DPI_PADDING_BOTTOM
+        }"
+      />
+    </div>
     <LineChartHorizontalBar
       ref="LineChartHorizontalBar"
       :data="labels" 
@@ -21,13 +43,15 @@
 </template>
 
 <script>
-import LineChartCanvas from '@/components/LineChart/LineChartCanvas.vue';
-import LineChartLeftBar from '@/components/LineChart/LineChartLeftBar.vue';
-import LineChartHorizontalBar from '@/components/LineChart/LineChartHorizontalBar.vue';
+import spacesInDigit from '@/assets/script/spacesInDigit';
+import LineChartCanvas from '@/components/charts/LineChart/LineChartCanvas.vue';
+import LineChartLeftBar from '@/components/charts/LineChart/LineChartLeftBar.vue';
+import LineChartHorizontalBar from '@/components/charts/LineChart/LineChartHorizontalBar.vue';
+import LineChartTooltip from '@/components/charts/LineChart/LineChartTooltip.vue';
 
 export default {
   name: 'LineChart',
-  components: { LineChartCanvas, LineChartLeftBar, LineChartHorizontalBar },
+  components: { LineChartCanvas, LineChartLeftBar, LineChartHorizontalBar, LineChartTooltip },
   props: {
     theme: { 
       type: String, 
@@ -38,14 +62,13 @@ export default {
       }
     },
     counter: { type: String, required: false, default: '' },
+    labelsRaw: { type: Array, required: false, default: function() { return [] } },
+    fact: { type: Array, required: true },
+    plan: { type: Array, required: false, default: function() { return [] } },
+    data: { type: Array, required: false, default: function() { return [] } },
   },
   data: () => ({
-    fact: [21000, 38000, 25000, 0, 47893, 143000, 143000, 143000, 31954, 78992, 15666, 67359],
-    plan: [60000, 55000, 10000, 109553, 40500, 60000, 36725, 54653, 62359, 19999, 34615, 0],
-    labels: ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'],
-    lineChartColors: ['#E83D46', '#DADADA', '#F9A620', '#005FA7', '#00BFB9', '#FD2D91'],
-    // 'rgba(38, 36, 36, 0.17)'
-    // 'rgba(38, 36, 36, 0.17)'
+    isInitialized: false,
     canvas: {
       canvas: null,
       ctx: null,
@@ -54,29 +77,70 @@ export default {
       leftBarNumber: 5,
     },
     pointerActive: null,
+    coordsAxisX: [],
+    coordsAxisY: [],
   }),
   mounted() {
+    if (this.noData) return
     this.initCanvas()
+    this.isInitialized = true
     window.addEventListener('resize', this.initCanvas)
   },
   destroyed() {
     window.removeEventListener('resize', this.initCanvas)
   },
+  watch: {
+    theme() {
+      this.initCanvas()
+    }
+  },
+  computed: {
+    maxPoint() {
+      return Math.max(...this.dataMergedValues)
+    },
+    dataMergedValues() {
+      return this.data.reduce((accArr, item, index, array) => {
+        return accArr.concat(item.values)
+      }, [])
+    },
+    labels() {
+      return this.labelsRaw.map(item => item.label)
+    },
+    labelsDesc() {
+      return this.labelsRaw.map(item => item.desc)
+    },
+    noData() {
+      return (this.fact.length === 0 && this.plan.length === 0) || (this.fact.reduce((acc, item) => acc += item, 0) === 0 && this.plan.reduce((acc, item) => acc += item, 0) === 0)
+    },
+    colors() {
+      return [
+        { color: '#E83D46', alpha: 1 },
+        { color: '#DADADA', alpha: this.theme === 'light' ? 1 : 0.17 },
+        { color: '#F9A620', alpha: 1 },
+        { color: '#005FA7', alpha: 1 },
+        { color: '#00BFB9', alpha: 1 },
+        { color: '#FD2D91', alpha: 1 },
+      ]
+    },
+  },
   methods: {
     initCanvas() {
+      if (this.noData) return
       this.canvas.canvas = this.$refs.canvas.$el
       this.canvas.ctx = this.canvas.canvas.getContext('2d')
       this.setCanvasDimensions(this.canvas.canvas)
       this.drawDashMarkup()
+      this.setPeaks()
+      // const secondLineAlpha = this.theme === 'light' ? 1 : 0.17
 
-      if (this.theme === 'light') {
-        this.drawLineChartBezier(this.plan, this.lineChartColors[1], 1)
-      } else {
-        this.drawLineChartBezier(this.plan, this.lineChartColors[1], 0.17)
+      for (let i = this.data.length - 1; i > -1; i--) {
+        const item = this.data[i]
+        if (item.values.length > 2) {
+          this.drawLineChartBezier(item.values, this.colors[i].color, this.colors[i].alpha)
+        } else {
+          this.drawLineChart(item.values, this.colors[i].color, this.colors[i].alpha)
+        }
       }
-
-      this.drawLineChartBezier(this.fact, this.lineChartColors[0], 1)
-      // this.drawLineChart(this.fact, this.lineChartColors[0], 1)
 
       // this.canvas.ctx.save()
     },
@@ -152,6 +216,19 @@ export default {
       drawCoreDash()
 
       ctx.closePath()
+    },
+    setPeaks() {
+      const DPI_HEIGHT_VIEW = this.canvas.DPI_HEIGHT_VIEW
+      const DPI_PADDING_TOP = this.canvas.DPI_PADDING_TOP
+      const ratio = DPI_HEIGHT_VIEW / this.maxPoint
+      const coordsAxisX = this.getCoordsAxisX()
+      this.coordsAxisX = coordsAxisX
+      this.coordsAxisY = []
+
+      for (const { values } of this.data) {
+        const axisY = values.map(item => ((DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio) / 2)
+        this.coordsAxisY.push(axisY)
+      }
     },
     drawLineChart(data, color, alpha) {
       const ctx = this.canvas.ctx
@@ -271,15 +348,20 @@ export default {
       const ctx = this.canvas.ctx
       const DPI_PADDING_TOP = this.canvas.DPI_PADDING_TOP
       const DPI_PADDING_BOTTOM = this.canvas.DPI_PADDING_BOTTOM
-      // const maxPoint = Math.max(...this.fact)
-      const maxPoint = this.maxPoint
-      const ratio = this.canvas.DPI_HEIGHT_VIEW / maxPoint
-      const axisX = this.getCoordsAxisX()
-      const axisY = this.fact.map(item => (this.canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio)
+      // const maxPoint = this.maxPoint
+      // const ratio = this.canvas.DPI_HEIGHT_VIEW / maxPoint
+      // const axisX = this.getCoordsAxisX()
+      // const axisY = this.fact.map(item => (this.canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio)
       const index = this.pointerActive
-      const tooltipWidth = 105 * 2
-      const tooltipHeight = 67 * 2
+      const axisX = this.coordsAxisX[index] 
+      const axisY = this.canvas.DPI_HEIGHT - this.coordsAxisY[0][index]
+      const tooltipMinWidth = 105 * 2
+      const tooltipMinHeight = 67 * 2
+      let tooltipWidth = tooltipMinWidth
+      let tooltipHeight = tooltipMinHeight
       const pointerOuterWidth = 14
+
+      console.log(axisY)
 
       const drawOuterCircle = (width) => {
         ctx.beginPath()
@@ -287,7 +369,7 @@ export default {
         ctx.shadowOffsetX = 0
         ctx.shadowOffsetY = 3
         ctx.shadowColor = 'rgba(0, 0, 0, 0.25)'
-        ctx.arc(axisX[index] * 2, axisY[index], width, 0, 2*Math.PI, false)
+        ctx.arc(axisX * 2, axisY, width, 0, 2*Math.PI, false)
         ctx.fillStyle = '#FFFFFF'
         ctx.fill()
         ctx.lineWidth = 1
@@ -301,7 +383,7 @@ export default {
         ctx.shadowOffsetX = 0
         ctx.shadowOffsetY = 0
         ctx.shadowColor = 0
-        ctx.arc(axisX[index] * 2, axisY[index], 6, 0, 2*Math.PI, false)
+        ctx.arc(axisX * 2, axisY, 6, 0, 2*Math.PI, false)
         ctx.fillStyle = '#E83D46'
         ctx.fill()
         ctx.lineWidth = 1
@@ -318,30 +400,111 @@ export default {
         const dashGap = 5 * 2
 
         ctx.setLineDash([dashWidth, dashGap])
-        ctx.moveTo(axisX[index] * 2, this.canvas.DPI_HEIGHT - DPI_PADDING_BOTTOM - lineWidth)
-        ctx.lineTo(axisX[index] * 2, axisY[index])
+        ctx.moveTo(axisX * 2, this.canvas.DPI_HEIGHT - DPI_PADDING_BOTTOM - lineWidth)
+        ctx.lineTo(axisX * 2, axisY)
         ctx.stroke()
       }
-      const drawTooltip = (width, height) => {
+      const drawTooltip = (tooltipWidth, tooltipHeight) => {
 
         const definePosition = () => {
-          const rightSide = axisX[index] * 2 + marginX + width
-          const topSide = axisY[index] - height - marginY 
+          const rightSide = axisX * 2 + marginX + width
+          const topSide = axisY - height - marginY 
 
           if (rightSide > this.canvas.DPI_WIDTH) {
-            xCoord = axisX[index] * 2 - marginX - width
+            xCoord = axisX * 2 - marginX - width
           }
           else {
-            xCoord = axisX[index] * 2 + marginX
+            xCoord = axisX * 2 + marginX
           }
 
           if (topSide < 0) {
-            yCoord = axisY[index] + marginY
+            yCoord = axisY + marginY
           }
           else {
-            yCoord = axisY[index] - height - marginY
+            yCoord = axisY - height - marginY
           }
         }
+
+        const drawTextLine = (options) => {
+          if (options.text === null || options.text === undefined) return
+          ctx.shadowBlur = 0
+          ctx.shadowOffsetX = 0
+          ctx.shadowOffsetY = 0
+          ctx.shadowColor = 0
+          ctx.fillStyle = options.color
+          ctx.font = options.font
+          const text = options.text
+          const maxWidth = width - paddingLeft - paddingRight
+          const metrics = ctx.measureText(text)
+          const actualTextHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
+          const actualTextWidth = metrics.width
+          const actualWidth = actualTextWidth + (width * paddingPercentLeft) + (width * paddingPercentRight)
+          const xAxisCoord = xCoord + paddingLeft
+          const yAxisCoord = yCoord + actualTextHeight + paddingTop + lineHeight + options.gap
+          lineHeight += actualTextHeight
+          ctx.fillText(text, xAxisCoord, yAxisCoord, maxWidth)
+        }
+
+        const findWidth = (minWidth, maxWidth, textWidth) => {
+          let actualWidth = textWidth + paddingLeft + paddingRight
+          actualWidth = actualWidth > maxWidth ? maxWidth : actualWidth
+          return actualWidth > minWidth ? actualWidth : minWidth
+        }
+
+        const findMaxTextWidth = () => {
+          let maxTextWidth = 0
+
+          for (let i = 0; i < textOptions.length; i++) {
+            ctx.font = textOptions[i].font
+            const textWidth = ctx.measureText(textOptions[i].text).width
+            maxTextWidth = textWidth > maxTextWidth ? textWidth : maxTextWidth
+          }
+
+          return maxTextWidth
+        }
+
+        const findTextHeight = () => {
+          let textHeight = 0
+          for (let i = 0; i < textOptions.length; i++) {
+            let actualTextHeight = 0
+            if (textOptions[i].text !== null) {
+              ctx.font = textOptions[i].font
+              const metrics = ctx.measureText(textOptions[i].text)
+              actualTextHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent + textOptions[i].gap * i
+            }
+            textHeight += actualTextHeight
+          }
+          return textHeight
+        }
+
+        const findHeight = (minHeight) => {
+          let height = maxTextHeight + paddingTop + paddingBottom
+          height = height > minHeight ? height : minHeight
+          return height
+        }
+
+        const textOptions = [
+          {
+            color: this.colors[0].colors,
+            font: 'bold 32px Segoe UI,sans-serif',
+            text: spacesInDigit(this.fact[index]) + ' ' + this.counter,
+            gap: 0,
+          },
+          {
+            color: this.colors[1].colors,
+            font: 'bold 32px Segoe UI,sans-serif',
+            text: this.plan[index] ? spacesInDigit(this.plan[index]) + ' ' + this.counter : null,
+            gap: 24,
+          },
+          {
+            color: '#A7A7A7',
+            font: 'normal 28px Mail Sans Roman, sans-serif',
+            text: this.labelsDesc[index] ? this.labelsDesc[index] : this.labels[index] ? this.labels[index] : null,
+            gap: 24,
+          },
+        ]
+
+        const textOptionsFiltered = textOptions.filter(item => item.text !== null)
 
         const marginX = 9 * 2
         const marginY = pointerOuterWidth / 2
@@ -349,11 +512,19 @@ export default {
         const paddingPercentTop = 0.1333
         const paddingPercentRight = 0.1714
         const paddingPercentBottom = 0.1142
+        const paddingLeft = Number((tooltipWidth * paddingPercentLeft).toFixed(2))
+        const paddingTop = Number((tooltipWidth * paddingPercentTop).toFixed(2))
+        const paddingRight = Number((tooltipWidth * paddingPercentRight).toFixed(2))
+        const paddingBottom = 12
+        const maxTextWidth = findMaxTextWidth()
+        const maxWidth = 270
+        const width = findWidth(tooltipWidth, maxWidth, maxTextWidth)
+        const maxTextHeight = findTextHeight()
+        const height = findHeight(tooltipHeight)
         let xCoord = null
         let yCoord = null
-        let lineHeight = 0
-        // const position = definePosition()
         definePosition()
+        let lineHeight = 0
         ctx.beginPath()
         ctx.shadowBlur = 10
         ctx.shadowOffsetX = 0
@@ -363,45 +534,13 @@ export default {
         ctx.fillStyle = this.theme === 'light' ? '#FFFFFF' : '#262424'
         ctx.fill()
 
-        const drawTitle = () => {
-          ctx.shadowBlur = 0
-          ctx.shadowOffsetX = 0
-          ctx.shadowOffsetY = 0
-          ctx.shadowColor = 0
-          ctx.fillStyle = this.theme === 'light' ? "#262424" : '#FFFFFF'
-          ctx.font = 'bold 32px Segoe UI,sans-serif'
-          const text = this.fact[index] + ' ' + this.counter
-          const maxWidth = width - width * paddingPercentLeft - width * paddingPercentRight
-          const metrics = ctx.measureText(text)
-          // const fontHeight = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent
-          const actualHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
-          const xAxisCoord = xCoord + Number((width * paddingPercentLeft).toFixed(2))
-          const yAxisCoord = yCoord + actualHeight + Number((width * paddingPercentTop).toFixed(2)) + lineHeight
-          lineHeight += actualHeight
-          ctx.fillText(text, xAxisCoord, yAxisCoord, maxWidth)
-        }
-
-        const drawSubtitle = () => {
-          ctx.fillStyle = '#A7A7A7'
-          ctx.font = 'normal 28px Mail Sans Roman, sans-serif'
-          const text = this.labels[index]
-          const maxWidth = width - width * paddingPercentLeft - width * paddingPercentRight
-          const metrics = ctx.measureText(text)
-          // const fontHeight = metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent
-          const actualHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent
-          const xAxisCoord = xCoord + Number((width * paddingPercentLeft).toFixed(2))
-          const yAxisCoord = yCoord + actualHeight + Number((width * paddingPercentTop).toFixed(2)) + lineHeight + 24
-          ctx.fillText(text, xAxisCoord, yAxisCoord, maxWidth)
-        }
-
-        drawTitle()
-        drawSubtitle()
+        textOptionsFiltered.forEach((item, index) => drawTextLine({...item, gap: item.gap * index}))
       }
 
       drawVerticalLine()
-      drawOuterCircle(pointerOuterWidth)
-      drawInnerCircle()
-      drawTooltip(tooltipWidth, tooltipHeight)
+      // drawOuterCircle(pointerOuterWidth)
+      // drawInnerCircle()
+      // drawTooltip(tooltipWidth, tooltipHeight)
     },
     getHorizontalBarItemsCoords() {
       const horizontalBar = this.$refs.LineChartHorizontalBar.$el
@@ -446,26 +585,23 @@ export default {
       }
     },
     handlerCanvasMouseMove(e) {
-      this.initCanvas()
+      if (this.noData) return
+      if (e.target.id !== 'canvas') return
+      // this.initCanvas()
       const horizontalBarItemsCoords = this.getHorizontalBarItemsCoords()
       horizontalBarItemsCoords.forEach(([left, right], index) => {
         if (left <= e.clientX && e.clientX <= right) {
           this.pointerActive = index
         }
       })
-      this.drawPointer()
+      // this.drawPointer()
     },
     handlerCanvasMouseLeave() {
+      if (this.noData) return
       this.pointerActive = null
       // this.canvas.ctx.restore()
       this.initCanvas()
     },
-  },
-  computed: {
-    maxPoint() {
-      const data = [...this.fact, ...this.plan]
-      return Math.max(...data)
-    }
   },
 }
 </script>
@@ -486,12 +622,25 @@ export default {
   grid-column-gap: 5.5px;
   background-color: #FFFFFF;
 
+  @media (max-width: 1350px) {
+    max-width: 100%;
+  }
+
   @media (max-width: 500px) {
     grid-template-columns: 1fr;
+  }
+
+  &__canvas-wrapper {
+    position: relative;
   }
 }
 
 .chart.dark {
   background-color: #262424;
+  transition: 0.3s all;
+
+  & .chart__placeholder-text {
+    opacity: 0.1;
+  }
 }
 </style>
