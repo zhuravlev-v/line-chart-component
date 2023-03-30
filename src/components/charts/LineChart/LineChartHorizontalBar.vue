@@ -11,7 +11,7 @@
 
 <script>
 export default {
-  name: 'LineChartLeftBar',
+  name: 'LineChartHorizontalBar',
   props: {
     data: { type: Array, required: true },
     theme: { type: String, required: true },
@@ -39,7 +39,7 @@ export default {
     justify-content: space-between;
     // padding-top: 8.5px;
 
-    @media (max-width: 500px) {
+    @media (max-width: 768px) {
       display: none;
       grid-column: unset;
       grid-row: unset;
@@ -48,6 +48,14 @@ export default {
     &__item {
       flex-grow: 1;
       text-align: center;
+
+      // &:nth-child(even) {
+      //   @media (max-width: 768px) {
+      //     width: 1px;
+      //     overflow: hidden;
+      //     flex-grow: unset;
+      //   }
+      // }
 
       &.active {
         color: #E83D46;

@@ -2,13 +2,13 @@
   <div :class="[ 'chart', theme ]">
     <LineChartLeftBar
       v-if="!noData"
-      ref="LineChartLeftBar" 
-      :data="dataMergedValues" 
+      ref="LineChartLeftBar"
+      :data="dataMergedValues"
       :theme="theme"
       :itemsNumber="canvas.leftBarNumber"
     />
-    <div class="chart__canvas-wrapper" 
-      @mousemove="handlerCanvasMouseMove" 
+    <div class="chart__canvas-wrapper"
+      @mousemove="handlerCanvasMouseMove"
       @mouseleave="handlerCanvasMouseLeave"
     >
       <LineChartCanvas
@@ -16,27 +16,29 @@
         ref="canvas"
         id="canvas"
       />
+        <!-- :coords="[
+          coordsAxisX?.[pointerActive] || null,
+          coordsAxisY[0]?.[pointerActive] || null
+        ]" -->
       <LineChartTooltip
         v-if="isInitialized"
         :data="data"
         :active="pointerActive"
         :coordsAxisX="coordsAxisX"
         :coordsAxisY="coordsAxisY"
-        :coords="[
-          coordsAxisX?.[pointerActive] || null,
-          coordsAxisY[0]?.[pointerActive] || null
-        ]"
         :canvasRect="{
           width: canvas.DPI_WIDTH / 2,
           height: canvas.DPI_HEIGHT / 2,
           pBottom: canvas.DPI_PADDING_BOTTOM
         }"
+        :counter="counterFormatted"
+        :type="type"
       />
     </div>
     <LineChartHorizontalBar
       ref="LineChartHorizontalBar"
-      :data="labels" 
-      :theme="theme" 
+      :data="labels"
+      :theme="theme"
       :pointerActive="pointerActive"
     />
   </div>
@@ -53,18 +55,19 @@ export default {
   name: 'LineChart',
   components: { LineChartCanvas, LineChartLeftBar, LineChartHorizontalBar, LineChartTooltip },
   props: {
-    theme: { 
-      type: String, 
-      required: false, 
+    theme: {
+      type: String,
+      required: false,
       default: 'light',
       validator: function (value) {
         return ['light', 'dark'].includes(value)
       }
     },
-    counter: { type: String, required: false, default: '' },
+    counter: { type: [String, Array], required: false, default: ' ' },
+    type: { type: String, required: false, default: 'default' },
     labelsRaw: { type: Array, required: false, default: function() { return [] } },
-    fact: { type: Array, required: true },
-    plan: { type: Array, required: false, default: function() { return [] } },
+    // fact: { type: Array, required: true },
+    // plan: { type: Array, required: false, default: function() { return [] } },
     data: { type: Array, required: false, default: function() { return [] } },
   },
   data: () => ({
@@ -79,9 +82,13 @@ export default {
     pointerActive: null,
     coordsAxisX: [],
     coordsAxisY: [],
+    minPoint: 0,
+    maxPoint: 0,
   }),
   mounted() {
+
     if (this.noData) return
+    this.setMinMaxPoint()
     this.initCanvas()
     this.isInitialized = true
     window.addEventListener('resize', this.initCanvas)
@@ -95,9 +102,32 @@ export default {
     }
   },
   computed: {
-    maxPoint() {
-      return Math.max(...this.dataMergedValues)
+    counterFormatted() {
+      if (typeof this.counter === 'string') {
+        return this.counter
+      }
+      else if (Array.isArray(this.counter)) {
+        if (this.counter.length < this.data.length) {
+          const newCounter = this.counter
+          const placeholder = this.counter[0] ? this.counter[0] : ' '
+
+          for (let i = this.counter.length; i < this.data.length; i++) {
+            newCounter.push(placeholder)
+          }
+
+          return newCounter
+
+        } else {
+          return this.counter
+        }
+      }
     },
+    // minPoint() {
+    //   return Math.min(...this.dataMergedValues)
+    // },
+    // maxPoint() {
+    //   return Math.max(...this.dataMergedValues)
+    // },
     dataMergedValues() {
       return this.data.reduce((accArr, item, index, array) => {
         return accArr.concat(item.values)
@@ -110,7 +140,10 @@ export default {
       return this.labelsRaw.map(item => item.desc)
     },
     noData() {
-      return (this.fact.length === 0 && this.plan.length === 0) || (this.fact.reduce((acc, item) => acc += item, 0) === 0 && this.plan.reduce((acc, item) => acc += item, 0) === 0)
+      // return (this.fact.length === 0 && this.plan.length === 0) ||
+      // (this.fact.reduce((acc, item) => acc += item, 0) === 0 &&
+      // this.plan.reduce((acc, item) => acc += item, 0) === 0)
+      return this.dataMergedValues.length === 0
     },
     colors() {
       return [
@@ -124,6 +157,16 @@ export default {
     },
   },
   methods: {
+    setMinMaxPoint() {
+      this.minPoint = Math.min(...this.dataMergedValues)
+      this.maxPoint = Math.max(...this.dataMergedValues)
+
+      if (this.minPoint < 0) {
+        //console.log('setMinMaxPoint minPoint < 0')
+        this.maxPoint = this.maxPoint + Math.abs(this.minPoint)
+        // this.minPoint = 0
+      }
+    },
     initCanvas() {
       if (this.noData) return
       this.canvas.canvas = this.$refs.canvas.$el
@@ -176,7 +219,7 @@ export default {
           ctx.stroke()
         }
       }
-      
+
       const ctx = this.canvas.ctx
       const DPI_PADDING_TOP = this.canvas.DPI_PADDING_TOP
       const DPI_PADDING_BOTTOM = this.canvas.DPI_PADDING_BOTTOM
@@ -199,7 +242,7 @@ export default {
         leftBarItemGap_DPI = ((leftBarHeight - leftBarItemHeight_DPI / 2 * leftBar.children.length) / this.canvas.leftBarNumber).toFixed(2) * 2
       }
       // const leftBarItemGap_DPI = ((parseFloat(getComputedStyle(leftBar).height).toFixed(2) - leftBarItemHeight_DPI / 2 * leftBar.children.length) / this.canvas.leftBarNumber).toFixed(2) * 2
-      
+
       ctx.beginPath()
       ctx.strokeStyle = this.theme === 'light' ? '#EDEDED' : '#575757'
       // ctx.strokeStyle = 'blue'
@@ -220,23 +263,59 @@ export default {
       const DPI_HEIGHT_VIEW = this.canvas.DPI_HEIGHT_VIEW
       const DPI_PADDING_TOP = this.canvas.DPI_PADDING_TOP
       const ratio = DPI_HEIGHT_VIEW / this.maxPoint
-      const coordsAxisX = this.getCoordsAxisX()
-      this.coordsAxisX = coordsAxisX
+      const minPoint = this.minPoint
+      // const coordsAxisX = this.getCoordsAxisX()
+      // this.coordsAxisX = coordsAxisX
+      this.coordsAxisX = this.getCoordsAxisX()
       this.coordsAxisY = []
 
-      for (const { values } of this.data) {
-        const axisY = values.map(item => ((DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio) / 2)
-        this.coordsAxisY.push(axisY)
+      if (minPoint > 0) {
+      //  console.log('minPoint > 0')
+        for (const { values } of this.data) {
+          const axisY = values.map(item => ((DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio) / 2)
+          this.coordsAxisY.push(axisY)
+        }
       }
+      else {
+      //  console.log('minPoint < 0')
+        // const valuesMergedCopy = []
+        for (const { values } of this.data) {
+          const axisY = values.map(item => {
+            const itemNormalized = item >= 0 ? item : item + Math.abs(minPoint)
+            // const itemNormalized = item + Math.abs(minPoint)
+          //  console.log(itemNormalized)
+            // valuesMergedCopy.push(itemNormalized)
+            return ((DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - itemNormalized * ratio) / 2
+          })
+          this.coordsAxisY.push(axisY)
+        }
+        // const newMaxPoint = Math.max(...valuesMergedCopy)
+        // console.log(newMaxPoint)
+        // this.maxPoint = newMaxPoint
+      }
+
     },
     drawLineChart(data, color, alpha) {
       const ctx = this.canvas.ctx
       const DPI_PADDING_TOP = this.canvas.DPI_PADDING_TOP
       // const maxPoint = Math.max(...data)
       const maxPoint = this.maxPoint
+      const minPoint = this.minPoint
       const ratio = this.canvas.DPI_HEIGHT_VIEW / maxPoint
-      const axisY = data.map(item => (this.canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio)
       const axisX = this.getCoordsAxisX()
+      // const axisY = data.map(item => (this.canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio)
+      let axisY
+      //
+        if (minPoint > 0) {
+          axisY = data.map(item => (this.canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio)
+        }
+        else {
+          axisY = data.map(item => {
+            const itemNormalized = item >= 0 ? item : item + Math.abs(minPoint)
+            return (this.canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - itemNormalized * ratio
+          })
+        }
+      //
 
       for (let i = 0; i < data.length; i++) {
         if (isFinite(i + 1)) {
@@ -252,15 +331,47 @@ export default {
       }
       ctx.globalAlpha = 1
     },
+    drawLineChartCurve(ctx, ptsa, color) {
+      ctx.strokeStyle = /* '#E83D46' */ color
+      ctx.lineWidth = 3
+      ctx.setLineDash([0, 0]);
+      var points = ptsa
+      ctx.beginPath();
+      // move to the first point
+      ctx.moveTo((points[0].x), points[0].y);
+      for(var i = 0; i < points.length-1; i ++) {
+          var x_mid = (points[i].x + points[i+1].x) / 2;
+          var y_mid = (points[i].y + points[i+1].y) / 2;
+          var cp_x1 = (x_mid + points[i].x) / 2;
+          var cp_x2 = (x_mid + points[i+1].x) / 2;
+          ctx.quadraticCurveTo(cp_x1,points[i].y ,x_mid, y_mid);
+          ctx.quadraticCurveTo(cp_x2,points[i+1].y,points[i+1].x,points[i+1].y);
+      }
+      ctx.stroke();
+      ctx.closePath();
+    },
     drawLineChartBezier(data, color, alpha) {
       const canvas = this.canvas
       const ctx = this.canvas.ctx
       const DPI_PADDING_TOP = canvas.DPI_PADDING_TOP
-      // const maxPoint = Math.max(...data)
       const maxPoint = this.maxPoint
+      const minPoint = this.minPoint
       const ratio = canvas.DPI_HEIGHT_VIEW / maxPoint
-      const axisX = this.getCoordsAxisX()
-      const axisY = data.map(item => (canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio)
+      // const axisX = this.getCoordsAxisX()
+      const axisX = this.coordsAxisX
+      // const axisY = data.map(item => (canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio)
+      let axisY
+      //
+      if (minPoint > 0) {
+        axisY = data.map(item => (canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - item * ratio)
+      }
+      else {
+        axisY = data.map(item => {
+          const itemNormalized = item >= 0 ? item : item + Math.abs(minPoint)
+          return (canvas.DPI_HEIGHT_VIEW + DPI_PADDING_TOP) - itemNormalized * ratio
+        })
+      }
+      //
       const horizontalBarItemsWidth = this.horizontalBarItemsWidth()
       let yA, yB, yC, xA, subYaYb, subYaYc, k, s, xLeft, yLeft, xRight, yRight
 
@@ -269,7 +380,7 @@ export default {
       yA = axisY[0]
       yC = axisY[1]
 
-      ctx.moveTo(axisX[0], yA)
+      ctx.moveTo(axisX[0] * 2, yA)
 
       for (let i = 1; i < data.length; i++) {
         const xStretch = Number(horizontalBarItemsWidth[i])
@@ -315,13 +426,13 @@ export default {
       //   //ctx.lineTo(xRight, yRight);
       }
 
-      
+
       ctx.lineWidth = 3 * 2
       ctx.setLineDash([])
       ctx.globalAlpha = alpha
       ctx.strokeStyle = color
       ctx.stroke();
-    },   
+    },
     getCoordsAxisX() {
       const axisX = []
       const horizontalBarItemsWidth = this.horizontalBarItemsWidth()
@@ -408,7 +519,7 @@ export default {
 
 <style lang='scss' scoped>
 .chart {
-  max-width: 810px;
+  max-width: 1260px;
   max-height: 350px;
   width: 100%;
   height: 350px;
@@ -426,12 +537,21 @@ export default {
     max-width: 100%;
   }
 
-  @media (max-width: 500px) {
+  @media (max-width: 768px) {
     grid-template-columns: 1fr;
   }
 
   &__canvas-wrapper {
     position: relative;
+    width: 100%;
+    height: 278px;
+    grid-column: 2/3;
+    grid-row: 1/2;
+
+    @media (max-width: 768px) {
+      grid-column: unset;
+      grid-row: unset;
+    }
   }
 }
 

@@ -34,7 +34,7 @@ export default {
   grid-column: 2/3;
   grid-row: 1/2;
 
-  @media (max-width: 500px) {
+  @media (max-width: 768px) {
     grid-column: unset;
     grid-row: unset;
   }
@@ -47,7 +47,7 @@ export default {
   grid-row: 1/2;
   position: relative;
 
-  @media (max-width: 500px) {
+  @media (max-width: 768px) {
     grid-column: unset;
     grid-row: unset;
   }
@@ -58,7 +58,7 @@ export default {
     font-weight: 700;
     font-size: 32px;
     line-height: 155%;
-    text-align: right;
+    text-align: center;
     text-transform: uppercase;
   }
 }

@@ -18,6 +18,7 @@ export default {
       digits = digits.sort((a, b) => a - b)
       digits = this.truncArrayTo(digits, this.itemsNumber)
       return digits.map(digit => this.replaceThousands(digit))
+      // return digits
     },
   },
   methods: {
@@ -44,14 +45,39 @@ export default {
     },
     truncArrayTo(arr, div) {
       const arrMax = arr[arr.length - 1]
-      const step = arrMax / div
+      const arrMin = arr[0]
       const arrCore = []
+      let step
 
-      for (let i = 1; i <= div - 1; i++) {
-        arrCore.push(step * i)
+      if (arrMin < 0) {
+        step = (arrMax + Math.abs(arrMin)) / div
+        let currentStep = arrMin
+
+        for (let i = 1; i <= div -1; i++) {
+          currentStep += step
+          arrCore.push(currentStep)
+        }
+
+        return [arrMin, ...arrCore, arrMax]
+      }
+      else {
+        step = arrMax / div
+
+        for (let i = 1; i <= div - 1; i++) {
+          arrCore.push(step * i)
+        }
+
+        return [0, ...arrCore, arrMax]
       }
 
-      return [0, ...arrCore, arrMax]
+
+      // if (arrMax > 0) {
+      //   return [0, ...arrCore, arrMax]
+      // }
+      // else {
+      //   return [arrMax, ...arrCore, 0]
+      // }
+
     }
   },
 }
@@ -76,7 +102,7 @@ export default {
     grid-column: 1/2;
     grid-row: 1/2;
 
-    @media (max-width: 500px) {
+    @media (max-width: 768px) {
       display: none;
       grid-column: unset;
       grid-row: unset;
